@@ -1,6 +1,7 @@
 import socket
 import sys
 import urllib.parse
+from threading import Thread
 
 from typing import Tuple, TypeAlias, Optional
 
@@ -21,6 +22,23 @@ def client(destination: Optional[Address]):
         send(inp, destination)
 
 
+def handle_client(client_socket: socket, destination: Optional[Address]):
+    while True:
+        size = client_socket.recv(4)
+        if len(size) == 0:
+            return
+        size = int.from_bytes(size, "big")
+
+        message = client_socket.recv(size)
+        if len(message) != size:
+            return
+        message = str(message, "utf-8")
+        print(f"received from {client_socket.getpeername()[0]}")
+        print("->", message)
+
+        send(message, destination)
+
+
 def server(port: Port, destination: Optional[Address]):
     addr = ("", port)  # all interfaces
     if socket.has_dualstack_ipv6():
@@ -34,13 +52,8 @@ def server(port: Port, destination: Optional[Address]):
     print()
 
     while True:
-        (client_socket, address) = server_socket.accept()
-        size = int.from_bytes(client_socket.recv(4), "big")
-        message = str(client_socket.recv(size), "utf-8")
-        print(f"received from {client_socket.getpeername()[0]}")
-        print("->", message)
-
-        send(message, destination)
+        (client_socket, _) = server_socket.accept()
+        Thread(target=handle_client, args=[client_socket, destination]).start()
 
 
 def send(message: str, destination: Optional[Address]):
